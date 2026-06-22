@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;hm;inl;inc;xsd</Extensions>
+    </Filter>
+    <Filter Include="Source Files\\analyzers">
+      <UniqueIdentifier>{8D00B458-91D6-4B50-9A9D-C959CA8B5EE4}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\\analyzers">
+      <UniqueIdentifier>{797E0AF5-E557-4EB1-B8AE-E4D97FF68E23}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\\report">
+      <UniqueIdentifier>{6E6A65FE-8A7D-4E37-BFC0-EC8C4E3E9B11}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\\report">
+      <UniqueIdentifier>{A0B7CA0A-6827-4BB8-9109-B07256E6D2A8}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="main.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="TokenScanner.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="SymbolTable.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="RuleEngine.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="analyzers\HeapMismatchAnalyzer.cpp"><Filter>Source Files\analyzers</Filter></ClCompile>
+    <ClCompile Include="analyzers\BufferOverrunAnalyzer.cpp"><Filter>Source Files\analyzers</Filter></ClCompile>
+    <ClCompile Include="analyzers\CtorInitAnalyzer.cpp"><Filter>Source Files\analyzers</Filter></ClCompile>
+    <ClCompile Include="analyzers\ThreadSafetyAnalyzer.cpp"><Filter>Source Files\analyzers</Filter></ClCompile>
+    <ClCompile Include="analyzers\AllocatorAnalyzer.cpp"><Filter>Source Files\analyzers</Filter></ClCompile>
+    <ClCompile Include="analyzers\StackHeapAnalyzer.cpp"><Filter>Source Files\analyzers</Filter></ClCompile>
+    <ClCompile Include="report\ReportGenerator.cpp"><Filter>Source Files\report</Filter></ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="TokenScanner.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="SymbolTable.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="RuleEngine.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="analyzers\HeapMismatchAnalyzer.h"><Filter>Header Files\analyzers</Filter></ClInclude>
+    <ClInclude Include="analyzers\BufferOverrunAnalyzer.h"><Filter>Header Files\analyzers</Filter></ClInclude>
+    <ClInclude Include="analyzers\CtorInitAnalyzer.h"><Filter>Header Files\analyzers</Filter></ClInclude>
+    <ClInclude Include="analyzers\ThreadSafetyAnalyzer.h"><Filter>Header Files\analyzers</Filter></ClInclude>
+    <ClInclude Include="analyzers\AllocatorAnalyzer.h"><Filter>Header Files\analyzers</Filter></ClInclude>
+    <ClInclude Include="analyzers\StackHeapAnalyzer.h"><Filter>Header Files\analyzers</Filter></ClInclude>
+    <ClInclude Include="report\ReportGenerator.h"><Filter>Header Files\report</Filter></ClInclude>
+    <ClInclude Include="report\Severity.h"><Filter>Header Files\report</Filter></ClInclude>
+  </ItemGroup>
+</Project>
