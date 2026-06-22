@@ -6,6 +6,22 @@
 #include <iostream>
 
 namespace {
+std::string EscapeJson(const std::string& input) {
+    std::string out;
+    for (size_t i = 0; i < input.size(); ++i) {
+        const char c = input[i];
+        switch (c) {
+        case '\\': out += "\\\\"; break;
+        case '\"': out += "\\\""; break;
+        case '\n': out += "\\n"; break;
+        case '\r': out += "\\r"; break;
+        case '\t': out += "\\t"; break;
+        default: out += c; break;
+        }
+    }
+    return out;
+}
+
 std::string EscapeHtml(const std::string& input) {
     std::string out;
     for (size_t i = 0; i < input.size(); ++i) {
@@ -69,10 +85,10 @@ bool ReportGenerator::WriteJson(const std::vector<Finding>& findings, const std:
         const Finding& f = findings[i];
         out << "  {\n";
         out << "    \"severity\": \"" << SeverityToString(f.severity) << "\",\n";
-        out << "    \"file\": \"" << f.file << "\",\n";
+        out << "    \"file\": \"" << EscapeJson(f.file) << "\",\n";
         out << "    \"line\": " << f.line << ",\n";
-        out << "    \"rule\": \"" << f.rule << "\",\n";
-        out << "    \"message\": \"" << f.message << "\"\n";
+        out << "    \"rule\": \"" << EscapeJson(f.rule) << "\",\n";
+        out << "    \"message\": \"" << EscapeJson(f.message) << "\"\n";
         out << "  }";
         if (i + 1 < findings.size()) {
             out << ",";
