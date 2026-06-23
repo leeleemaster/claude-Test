@@ -256,34 +256,24 @@ static std::wstring GetCliExe() {
     return (written == size) ? exePath : std::wstring{};
 }
 
-// ─── Analyze ─────────────────────────────────────────────────────────────────
-static void DoAnalyze() {
-    wchar_t pathBuf[MAX_PATH] = {};
-    GetWindowTextW(g_hPath, pathBuf, MAX_PATH);
-    std::wstring srcPath = TrimW(pathBuf);
-    if (srcPath.empty()) {
-        MessageBoxW(g_hWnd, L"분석할 경로를 선택하세요.", L"경고", MB_ICONWARNING);
-        return;
-    }
+// ─── Analyze (background thread) ─────────────────────────────────────────────
+#define WM_ANALYZE_DONE (WM_USER + 1)
 
-    bool recursive = (g_hRecursive && Button_GetCheck(g_hRecursive) == BST_CHECKED);
+struct AnalyzeResult {
+    DWORD             exitCode = 0;
+    std::wstring      errMsg;
+    std::vector<Finding> findings;
+};
 
-    // temp JSON output in %TEMP%
-    wchar_t tempDir[MAX_PATH] = {};
-    GetTempPathW(MAX_PATH, tempDir);
-    std::wstring jsonOut = std::wstring(tempDir) + L"StaticHeapAnalyzerReport.json";
+struct AnalyzeParams {
+    std::wstring cmd;
+    std::wstring jsonOut;
+    std::wstring tempDir;
+};
 
-    // Delete old report
-    DeleteFileW(jsonOut.c_str());
-
-    std::wstring cli = GetCliExe();
-    if (cli.empty()) {
-        MessageBoxW(g_hWnd, L"StaticHeapAnalyzer.exe 를 찾거나 추출할 수 없습니다.",
-                    L"오류", MB_ICONERROR);
-        return;
-    }
-    std::wstring cmd = L"\"" + cli + L"\" --src \"" + srcPath + L"\" --report json";
-    if (recursive) cmd += L" --recursive";
+static DWORD WINAPI AnalyzeThread(LPVOID lpParam) {
+    AnalyzeParams* p = reinterpret_cast<AnalyzeParams*>(lpParam);
+    AnalyzeResult* res = new AnalyzeResult();
 
     SECURITY_ATTRIBUTES sa = {};
     sa.nLength        = sizeof(sa);
@@ -291,8 +281,10 @@ static void DoAnalyze() {
 
     HANDLE hRead = nullptr, hWrite = nullptr;
     if (!CreatePipe(&hRead, &hWrite, &sa, 0)) {
-        MessageBoxW(g_hWnd, L"파이프 생성 실패", L"오류", MB_ICONERROR);
-        return;
+        res->errMsg = L"파이프 생성 실패";
+        PostMessageW(g_hWnd, WM_ANALYZE_DONE, 0, (LPARAM)res);
+        delete p;
+        return 1;
     }
     SetHandleInformation(hRead, HANDLE_FLAG_INHERIT, 0);
 
@@ -304,25 +296,20 @@ static void DoAnalyze() {
     si.hStdError  = hWrite;
 
     PROCESS_INFORMATION pi = {};
-
-    if (g_hStatus) SetWindowTextW(g_hStatus, L"분석 중...");
-    if (g_hAnalyze) EnableWindow(g_hAnalyze, FALSE);
-
-    BOOL ok = CreateProcessW(nullptr, &cmd[0],
+    BOOL ok = CreateProcessW(nullptr, &p->cmd[0],
                              nullptr, nullptr, TRUE,
                              CREATE_NO_WINDOW, nullptr,
-                             tempDir, &si, &pi);
+                             p->tempDir.c_str(), &si, &pi);
     CloseHandle(hWrite);
 
     if (!ok) {
         CloseHandle(hRead);
-        if (g_hAnalyze) EnableWindow(g_hAnalyze, TRUE);
-        MessageBoxW(g_hWnd, L"분석기 실행 실패", L"오류", MB_ICONERROR);
-        if (g_hStatus) SetWindowTextW(g_hStatus, L"실패");
-        return;
+        res->errMsg = L"분석기 실행 실패\n(StaticHeapAnalyzer.exe 오류)";
+        PostMessageW(g_hWnd, WM_ANALYZE_DONE, 0, (LPARAM)res);
+        delete p;
+        return 1;
     }
 
-    // drain output
     std::string buf;
     char tmp[4096];
     DWORD rd;
@@ -331,28 +318,63 @@ static void DoAnalyze() {
     CloseHandle(hRead);
 
     WaitForSingleObject(pi.hProcess, INFINITE);
-    DWORD exitCode = 0;
-    GetExitCodeProcess(pi.hProcess, &exitCode);
+    GetExitCodeProcess(pi.hProcess, &res->exitCode);
     CloseHandle(pi.hProcess);
     CloseHandle(pi.hThread);
 
-    if (g_hAnalyze) EnableWindow(g_hAnalyze, TRUE);
+    if (res->exitCode == 1) {
+        res->errMsg = Utf8W(buf);
+    } else {
+        res->findings = ParseJson(p->jsonOut);
+    }
 
-    if (exitCode == 1) {
-        std::wstring msg = L"CLI 오류:\n" + Utf8W(buf);
-        MessageBoxW(g_hWnd, msg.c_str(), L"분석 실패", MB_ICONERROR);
-        if (g_hStatus) SetWindowTextW(g_hStatus, L"분석 실패");
+    PostMessageW(g_hWnd, WM_ANALYZE_DONE, 0, (LPARAM)res);
+    delete p;
+    return 0;
+}
+
+static void DoAnalyze() {
+    wchar_t pathBuf[MAX_PATH] = {};
+    GetWindowTextW(g_hPath, pathBuf, MAX_PATH);
+    std::wstring srcPath = TrimW(pathBuf);
+    if (srcPath.empty()) {
+        MessageBoxW(g_hWnd, L"분석할 경로를 선택하세요.", L"경고", MB_ICONWARNING);
         return;
     }
 
-    g_findings = ParseJson(jsonOut);
-    ListClear();
-    for (int i = 0; i < (int)g_findings.size(); ++i)
-        ListAdd(g_findings[i], i);
+    bool recursive = (g_hRecursive && Button_GetCheck(g_hRecursive) == BST_CHECKED);
 
-    std::wstring status = L"발견: " + std::to_wstring((int)g_findings.size()) + L"건";
-    if (exitCode == 2) status += L"  [HIGH/CRITICAL 포함]";
-    if (g_hStatus) SetWindowTextW(g_hStatus, status.c_str());
+    wchar_t tempDirBuf[MAX_PATH] = {};
+    GetTempPathW(MAX_PATH, tempDirBuf);
+    std::wstring tempDir = tempDirBuf;
+    std::wstring jsonOut = tempDir + L"StaticHeapAnalyzerReport.json";
+    DeleteFileW(jsonOut.c_str());
+
+    std::wstring cli = GetCliExe();
+    if (cli.empty()) {
+        MessageBoxW(g_hWnd, L"StaticHeapAnalyzer.exe 를 찾거나 추출할 수 없습니다.",
+                    L"오류", MB_ICONERROR);
+        return;
+    }
+
+    std::wstring cmd = L"\"" + cli + L"\" --src \"" + srcPath + L"\" --report json";
+    if (recursive) cmd += L" --recursive";
+
+    AnalyzeParams* p = new AnalyzeParams{ cmd, jsonOut, tempDir };
+
+    if (g_hStatus)  SetWindowTextW(g_hStatus, L"분석 중...");
+    if (g_hAnalyze) EnableWindow(g_hAnalyze, FALSE);
+    if (g_hBrowse)  EnableWindow(g_hBrowse, FALSE);
+
+    HANDLE hThread = CreateThread(nullptr, 0, AnalyzeThread, p, 0, nullptr);
+    if (!hThread) {
+        delete p;
+        if (g_hAnalyze) EnableWindow(g_hAnalyze, TRUE);
+        if (g_hBrowse)  EnableWindow(g_hBrowse, TRUE);
+        MessageBoxW(g_hWnd, L"스레드 생성 실패", L"오류", MB_ICONERROR);
+        return;
+    }
+    CloseHandle(hThread);
 }
 
 // ─── Window Procedure ────────────────────────────────────────────────────────
@@ -472,6 +494,27 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 return 0;
             }
         }
+        return 0;
+    }
+
+    case WM_ANALYZE_DONE: {
+        AnalyzeResult* res = reinterpret_cast<AnalyzeResult*>(lParam);
+        if (g_hAnalyze) EnableWindow(g_hAnalyze, TRUE);
+        if (g_hBrowse)  EnableWindow(g_hBrowse, TRUE);
+
+        if (!res->errMsg.empty()) {
+            MessageBoxW(hWnd, res->errMsg.c_str(), L"분석 실패", MB_ICONERROR);
+            if (g_hStatus) SetWindowTextW(g_hStatus, L"분석 실패");
+        } else {
+            g_findings = std::move(res->findings);
+            ListClear();
+            for (int i = 0; i < (int)g_findings.size(); ++i)
+                ListAdd(g_findings[i], i);
+            std::wstring status = L"발견: " + std::to_wstring((int)g_findings.size()) + L"건";
+            if (res->exitCode == 2) status += L"  [HIGH/CRITICAL 포함]";
+            if (g_hStatus) SetWindowTextW(g_hStatus, status.c_str());
+        }
+        delete res;
         return 0;
     }
 
