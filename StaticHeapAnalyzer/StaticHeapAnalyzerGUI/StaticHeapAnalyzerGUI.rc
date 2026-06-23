@@ -4,6 +4,9 @@
 #include "resource.h"
 #include <winres.h>
 
+// Embed Common Controls v6 manifest (enables visual styles)
+1 RT_MANIFEST "StaticHeapAnalyzerGUI.exe.manifest"
+
 LANGUAGE LANG_KOREAN, SUBLANG_KOREAN
 
 /////////////////////////////////////////////////////////////////////////////
