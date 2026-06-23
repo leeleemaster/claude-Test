@@ -72,3 +72,23 @@ R2/R3/R9 는 중괄호 스코프 프레임 스택으로 변수의 할당 종류(
 
 - `StaticHeapAnalyzer/test_samples/rule_samples.cpp` — R1~R9 및 음성(무경보) 케이스
 - `StaticHeapAnalyzer/test_samples/bad_sample.cpp` — 확장 규칙 포함 혼합 사례
+
+## 런타임 힙 상태 확인 (Release 어태치 환경)
+
+정적 분석 외에 Release 빌드에 디버거를 붙인 상태에서 힙 사용량을 직접 확인할 수 있다.
+
+```cpp
+#include <psapi.h>
+#pragma comment(lib, "psapi.lib")
+
+void PrintHeap() {
+    PROCESS_MEMORY_COUNTERS m = { sizeof(m) };
+    GetProcessMemoryInfo(GetCurrentProcess(), &m, sizeof(m));
+    char s[128];
+    sprintf_s(s, "WS: %zu MB / Peak: %zu MB\n",
+        m.WorkingSetSize >> 20, m.PeakWorkingSetSize >> 20);
+    OutputDebugStringA(s);
+}
+```
+
+원하는 지점에 `PrintHeap()` 를 호출하면 **DebugView** 또는 **WinDbg Output** 창에 출력된다.
