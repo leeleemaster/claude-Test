@@ -1,61 +1,38 @@
-// Microsoft Visual C++ generated resource script.
+// StaticHeapAnalyzerGUI.rc  -- Win32-only, no MFC/AFX
 #pragma code_page(65001)
 
 #include "resource.h"
-#define APSTUDIO_READONLY_SYMBOLS
-#include "afxres.h"
-#undef APSTUDIO_READONLY_SYMBOLS
+#include <winres.h>
 
-/////////////////////////////////////////////////////////////////////////////
-// Korean (Korea) resources
-
-#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_KOR)
 LANGUAGE LANG_KOREAN, SUBLANG_KOREAN
 
 /////////////////////////////////////////////////////////////////////////////
-// Dialog
-//
-// Layout (DLU, MS Shell Dlg 8pt ~= 1.5 px/DLU)
-// 500 x 352 DLU => ~750 x 528 px at 96 DPI
-// Korean labels are applied in OnInitDialog() via SetWindowText / SetDlgItemText.
-//
-IDD_MAIN_DIALOG DIALOGEX 0, 0, 500, 352
-STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX
-EXSTYLE WS_EX_APPWINDOW
-CAPTION "StaticHeapAnalyzer"
-FONT 8, "MS Shell Dlg", 400, 0, 0x1
+// Version
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION 1,0,0,0
+ PRODUCTVERSION 1,0,0,0
+ FILEFLAGSMASK 0x3fL
+ FILEFLAGS 0x0L
+ FILEOS 0x40004L
+ FILETYPE 0x1L
+ FILESUBTYPE 0x0L
 BEGIN
-    // Source path row
-    GROUPBOX        "GRPSRC",   IDC_GRP_SRC,   7,   5, 486,  24, WS_GROUP
-    EDITTEXT                    IDC_EDIT_PATH, 13,  14, 414,  13, ES_AUTOHSCROLL
-    PUSHBUTTON      "BROWSE",   IDC_BTN_BROWSE,432, 13,  55,  15
-
-    // Options row
-    GROUPBOX        "GRPOPT",   IDC_GRP_OPT,   7,  34, 486,  30, WS_GROUP
-    LTEXT           "LBLRPT",   IDC_LBL_REPORT,13,  46,  32,   9
-    COMBOBOX                    IDC_COMBO_REPORT, 47, 44, 60, 50, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
-    LTEXT           "LBLRULE",  IDC_LBL_RULES,115,  46,  24,   9
-    EDITTEXT                    IDC_EDIT_RULES,141,  44, 100,  13, ES_AUTOHSCROLL
-    CONTROL         "RECURSIVE",IDC_CHECK_RECURSIVE,"Button",BS_AUTOCHECKBOX|WS_TABSTOP,250,46,76,10
-    DEFPUSHBUTTON   "ANALYZE",  IDC_BTN_ANALYZE,400, 43,  86,  17
-
-    // Results list
-    GROUPBOX        "GRPRES",   IDC_GRP_RES,   7,  69, 486, 270, WS_GROUP
-    CONTROL         "",         IDC_LIST_RESULTS,"SysListView32",
-                    LVS_REPORT|LVS_SHOWSELALWAYS|LVS_FULLROWSELECT|WS_BORDER|WS_TABSTOP,
-                    13, 79, 474, 252
-
-    // Status bar
-    LTEXT           "STATUS",   IDC_STATIC_STATUS, 7, 344, 486, 12
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "041204b0"
+        BEGIN
+            VALUE "CompanyName",      "StaticHeapAnalyzer"
+            VALUE "FileDescription",  "Static Heap Analyzer GUI"
+            VALUE "FileVersion",      "1.0.0.0"
+            VALUE "InternalName",     "StaticHeapAnalyzerGUI"
+            VALUE "LegalCopyright",   "Copyright 2024"
+            VALUE "OriginalFilename", "StaticHeapAnalyzerGUI.exe"
+            VALUE "ProductName",      "Static Heap Analyzer"
+            VALUE "ProductVersion",   "1.0.0.0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x412, 1200
+    END
 END
-
-/////////////////////////////////////////////////////////////////////////////
-// String Table
-//
-STRINGTABLE
-BEGIN
-    AFX_IDS_APP_TITLE   "StaticHeapAnalyzer"
-    AFX_IDS_IDLEMESSAGE "Ready"
-END
-
-#endif    // Korean (Korea) resources
