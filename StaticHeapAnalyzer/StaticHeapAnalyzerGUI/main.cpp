@@ -299,7 +299,7 @@ static void DoSaveReport() {
         txt += L"\n\n";
     }
 
-    std::ofstream out(filePath, std::ios::binary | std::ios::trunc);
+    std::ofstream out(filePath, std::ios::trunc);
     if (!out) {
         MessageBoxW(g_hWnd, L"파일을 열 수 없습니다.", L"저장 실패", MB_ICONERROR);
         return;
