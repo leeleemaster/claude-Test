@@ -280,6 +280,7 @@ static HeapImpactInfo GetHeapImpact(const std::wstring& rule) {
         { L"R5",         { L"간접적 (INDIRECT)",       L"Zero-length memset is more of a logic/init defect than direct heap corruption by itself." } },
         { L"R6",         { L"가능성 있음 (POSSIBLE)",  L"Off-by-one indexing can become an out-of-bounds write/read depending on actual access." } },
         { L"R7",         { L"가능성 있음 (POSSIBLE)",  L"Missing ReleaseBuffer() can violate buffer ownership/contract and lead to later memory problems." } },
+        // R8 is not defined in this analyzer's rule set; omitted intentionally.
         { L"R9",         { L"직접적 (DIRECT)",        L"Double free is a classic direct heap corruption pattern." } },
         { L"ALLOC-001",  { L"가능성 있음 (POSSIBLE)",  L"Using raw allocated storage without proper object initialization can trigger invalid memory behavior." } },
         { L"CTOR-001",   { L"가능성 있음 (POSSIBLE)",  L"Uninitialized pointer member use may dereference invalid memory and can lead to heap corruption." } },
@@ -325,9 +326,9 @@ static void DoSave() {
     // Timestamp
     time_t now = time(nullptr);
     struct tm tm_info = {};
-    localtime_s(&tm_info, &now);
-    wchar_t timeBuf[64] = {};
-    wcsftime(timeBuf, 64, L"%Y-%m-%d %H:%M:%S", &tm_info);
+    wchar_t timeBuf[64] = L"(시각 불명)";
+    if (localtime_s(&tm_info, &now) == 0)
+        wcsftime(timeBuf, 64, L"%Y-%m-%d %H:%M:%S", &tm_info);
 
     // Build report text
     std::wstring report;
@@ -361,11 +362,18 @@ static void DoSave() {
     }
     ofs << "\xEF\xBB\xBF"; // UTF-8 BOM
     int bytes = WideCharToMultiByte(CP_UTF8, 0, report.c_str(), -1, nullptr, 0, nullptr, nullptr);
-    if (bytes > 1) {
-        std::string utf8(bytes - 1, '\0');
-        WideCharToMultiByte(CP_UTF8, 0, report.c_str(), -1, &utf8[0], bytes, nullptr, nullptr);
-        ofs << utf8;
+    if (bytes <= 1) {
+        ofs.close();
+        MessageBoxW(g_hWnd, L"문자열 변환 실패.", L"오류", MB_ICONERROR);
+        return;
     }
+    std::string utf8(bytes - 1, '\0');
+    if (WideCharToMultiByte(CP_UTF8, 0, report.c_str(), -1, &utf8[0], bytes, nullptr, nullptr) == 0) {
+        ofs.close();
+        MessageBoxW(g_hWnd, L"문자열 변환 실패.", L"오류", MB_ICONERROR);
+        return;
+    }
+    ofs << utf8;
     ofs.close();
 
     std::wstring saved = std::wstring(szFile);
