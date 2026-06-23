@@ -3,6 +3,7 @@ sha
 sha.exe
 StaticHeapAnalyzer.exe
 *.obj
+*.o
 *.pdb
 *.ilk
 *.exp
