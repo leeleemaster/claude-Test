@@ -270,6 +270,7 @@ static HeapImpactInfo GetHeapImpact(const std::wstring& rule) {
         return { L"가능성 있음 (POSSIBLE)", L"Off-by-one indexing can become an out-of-bounds write/read depending on actual access." };
     if (RulePrefixMatch(up, L"R7"))
         return { L"가능성 있음 (POSSIBLE)", L"Missing ReleaseBuffer() can violate buffer ownership/contract and lead to later memory problems." };
+    // R8 is intentionally not mapped here because it is not part of the requested heap impact table.
     if (RulePrefixMatch(up, L"R9"))
         return { L"직접적 (DIRECT)", L"Double free is a classic direct heap corruption pattern." };
     if (RulePrefixMatch(up, L"ALLOC-001"))
@@ -302,7 +303,7 @@ static bool WriteReportFile(const std::wstring& outputPath, std::wstring& error)
     HANDLE hFile = CreateFileW(outputPath.c_str(), GENERIC_WRITE, 0, nullptr,
                                CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (hFile == INVALID_HANDLE_VALUE) {
-        error = L"파일을 열 수 없습니다.";
+        error = L"파일을 열 수 없습니다. (오류 코드: " + std::to_wstring(GetLastError()) + L")";
         return false;
     }
 
@@ -342,10 +343,13 @@ static bool WriteReportFile(const std::wstring& outputPath, std::wstring& error)
     BYTE bom[3] = { 0xEF, 0xBB, 0xBF };
     DWORD written = 0;
     BOOL okBom = WriteFile(hFile, bom, sizeof(bom), &written, nullptr);
+    bool bomOk = (okBom && written == sizeof(bom));
     BOOL okTxt = WriteFile(hFile, utf8.data(), (DWORD)utf8.size(), &written, nullptr);
+    bool txtOk = (okTxt && written == utf8.size());
+    DWORD lastErr = GetLastError();
     CloseHandle(hFile);
-    if (!okBom || !okTxt) {
-        error = L"파일 쓰기에 실패했습니다.";
+    if (!bomOk || !txtOk) {
+        error = L"파일 쓰기에 실패했습니다. (오류 코드: " + std::to_wstring(lastErr) + L")";
         return false;
     }
     return true;
