@@ -254,7 +254,8 @@ static bool RulePrefixMatch(const std::wstring& rule, const std::wstring& key) {
 
 static HeapImpactInfo GetHeapImpact(const std::wstring& rule) {
     std::wstring up = rule;
-    std::transform(up.begin(), up.end(), up.begin(), towupper);
+    std::transform(up.begin(), up.end(), up.begin(),
+                   [](wchar_t c) { return static_cast<wchar_t>(std::towupper(static_cast<std::wint_t>(c))); });
 
     if (RulePrefixMatch(up, L"R1"))
         return { L"직접적 (DIRECT)", L"Potential out-of-bounds write/copy can directly corrupt adjacent memory or heap-managed buffers." };
@@ -270,7 +271,8 @@ static HeapImpactInfo GetHeapImpact(const std::wstring& rule) {
         return { L"가능성 있음 (POSSIBLE)", L"Off-by-one indexing can become an out-of-bounds write/read depending on actual access." };
     if (RulePrefixMatch(up, L"R7"))
         return { L"가능성 있음 (POSSIBLE)", L"Missing ReleaseBuffer() can violate buffer ownership/contract and lead to later memory problems." };
-    // R8 is intentionally not mapped here because it is not part of the requested heap impact table.
+    // R8 is intentionally not mapped here because only listed rule families are mapped;
+    // unmatched rules (including R8) fall back to "검토 필요 (REVIEW)" below.
     if (RulePrefixMatch(up, L"R9"))
         return { L"직접적 (DIRECT)", L"Double free is a classic direct heap corruption pattern." };
     if (RulePrefixMatch(up, L"ALLOC-001"))
@@ -346,9 +348,9 @@ static bool WriteReportFile(const std::wstring& outputPath, std::wstring& error)
     bool bomOk = (okBom && written == sizeof(bom));
     BOOL okTxt = WriteFile(hFile, utf8.data(), (DWORD)utf8.size(), &written, nullptr);
     bool txtOk = (okTxt && written == utf8.size());
-    DWORD lastErr = GetLastError();
     CloseHandle(hFile);
     if (!bomOk || !txtOk) {
+        DWORD lastErr = GetLastError();
         error = L"파일 쓰기에 실패했습니다. (오류 코드: " + std::to_wstring(lastErr) + L")";
         return false;
     }
