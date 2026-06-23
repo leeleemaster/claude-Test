@@ -6,6 +6,7 @@
 #include <windows.h>
 #include <windowsx.h>
 #include <commctrl.h>
+#include <commdlg.h>
 #include <shlobj.h>
 
 #include <string>
@@ -24,6 +25,7 @@
 #define IDC_BTN_ANALYZE     1006
 #define IDC_LIST_RESULTS    1007
 #define IDC_STATIC_STATUS   1008
+#define IDC_BTN_SAVE        1009
 
 // ─── Finding ─────────────────────────────────────────────────────────────────
 struct Finding {
@@ -141,6 +143,7 @@ static HWND g_hPath      = nullptr;
 static HWND g_hBrowse    = nullptr;
 static HWND g_hRecursive = nullptr;
 static HWND g_hAnalyze   = nullptr;
+static HWND g_hSave      = nullptr;
 static HWND g_hList      = nullptr;
 static HWND g_hStatus    = nullptr;
 
@@ -168,8 +171,10 @@ static void DoLayout(HWND hWnd) {
     if (g_hRecursive) MoveWindow(g_hRecursive, R - checkW, y, checkW, ROW, TRUE);
     y += ROW + GAP;
 
-    // Row 3: analyze button
-    if (g_hAnalyze) MoveWindow(g_hAnalyze, M, y, R - M, 28, TRUE);
+    // Row 3: analyze button + save button
+    const int saveW = 90;
+    if (g_hAnalyze) MoveWindow(g_hAnalyze, M, y, R - M - GAP - saveW, 28, TRUE);
+    if (g_hSave)    MoveWindow(g_hSave,    R - saveW, y, saveW, 28, TRUE);
     y += 28 + GAP;
 
     // Status bar
@@ -355,6 +360,166 @@ static void DoAnalyze() {
     if (g_hStatus) SetWindowTextW(g_hStatus, status.c_str());
 }
 
+// ─── Heap impact classifier ───────────────────────────────────────────────────
+static const wchar_t* HeapImpact(const std::wstring& rule, const std::wstring& severity) {
+    // Direct heap corruption rules
+    if (rule.find(L"R1")           != std::wstring::npos ||
+        rule.find(L"overrun")      != std::wstring::npos) return L"DIRECT";
+    if (rule.find(L"R2")           != std::wstring::npos ||
+        rule.find(L"new-delete")   != std::wstring::npos) return L"DIRECT";
+    if (rule.find(L"R3")           != std::wstring::npos ||
+        rule.find(L"new-free")     != std::wstring::npos) return L"DIRECT";
+    if (rule.find(L"R6")           != std::wstring::npos ||
+        rule.find(L"off-by-one")   != std::wstring::npos) return L"DIRECT";
+    if (rule.find(L"R9")           != std::wstring::npos ||
+        rule.find(L"double-free")  != std::wstring::npos) return L"DIRECT";
+    if (rule.find(L"STACK-001")    != std::wstring::npos) return L"DIRECT";
+    // Possible heap impact rules
+    if (rule.find(L"R4")           != std::wstring::npos ||
+        rule.find(L"sizeof")       != std::wstring::npos) return L"POSSIBLE";
+    if (rule.find(L"R7")           != std::wstring::npos ||
+        rule.find(L"GetBuffer")    != std::wstring::npos) return L"POSSIBLE";
+    if (rule.find(L"ALLOC-001")    != std::wstring::npos) return L"POSSIBLE";
+    if (rule.find(L"CTOR-001")     != std::wstring::npos) return L"POSSIBLE";
+    if (rule.find(L"THREAD-001")   != std::wstring::npos) return L"POSSIBLE";
+    // Indirect rules
+    if (rule.find(L"R5")           != std::wstring::npos ||
+        rule.find(L"memset")       != std::wstring::npos) return L"INDIRECT";
+    // Fallback based on severity
+    if (severity == L"CRITICAL" || severity == L"HIGH") return L"DIRECT";
+    if (severity == L"MEDIUM")                          return L"POSSIBLE";
+    return L"INDIRECT";
+}
+
+// ─── Save Results ─────────────────────────────────────────────────────────────
+static void DoSaveResults() {
+    if (g_findings.empty()) {
+        MessageBoxW(g_hWnd,
+            L"저장할 분석 결과가 없습니다.\n먼저 분석을 실행하세요.",
+            L"알림", MB_ICONINFORMATION);
+        return;
+    }
+
+    wchar_t szFile[MAX_PATH] = L"HeapAnalysisReport.txt";
+
+    OPENFILENAMEW ofn  = {};
+    ofn.lStructSize    = sizeof(ofn);
+    ofn.hwndOwner      = g_hWnd;
+    ofn.lpstrFilter    = L"텍스트 파일 (*.txt)\0*.txt\0모든 파일 (*.*)\0*.*\0";
+    ofn.lpstrFile      = szFile;
+    ofn.nMaxFile       = MAX_PATH;
+    ofn.lpstrDefExt    = L"txt";
+    ofn.lpstrTitle     = L"분석 결과 저장";
+    ofn.Flags          = OFN_OVERWRITEPROMPT | OFN_PATHMUSTEXIST;
+
+    if (!GetSaveFileNameW(&ofn))
+        return;  // User cancelled
+
+    // ── Build report ──────────────────────────────────────────────────────────
+    std::wstring report;
+    report.reserve(8192);
+
+    report += L"================================================================\n";
+    report += L"  Static Heap Analyzer - 힙 메모리 분석 보고서\n";
+    report += L"================================================================\n\n";
+
+    // Target path
+    wchar_t pathBuf[MAX_PATH] = {};
+    if (g_hPath) GetWindowTextW(g_hPath, pathBuf, MAX_PATH);
+    if (pathBuf[0]) {
+        report += L"분석 대상 : ";
+        report += pathBuf;
+        report += L"\n";
+    }
+
+    // Export timestamp
+    SYSTEMTIME st = {};
+    GetLocalTime(&st);
+    wchar_t timeBuf[64] = {};
+    swprintf_s(timeBuf, L"내보내기  : %04d-%02d-%02d %02d:%02d:%02d\n",
+               st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
+    report += timeBuf;
+
+    // Summary
+    int nCrit = 0, nHigh = 0, nMed = 0, nLow = 0;
+    for (const auto& f : g_findings) {
+        if      (f.severity == L"CRITICAL") ++nCrit;
+        else if (f.severity == L"HIGH")     ++nHigh;
+        else if (f.severity == L"MEDIUM")   ++nMed;
+        else if (f.severity == L"LOW")      ++nLow;
+    }
+    wchar_t sumBuf[256] = {};
+    swprintf_s(sumBuf,
+        L"총 발견   : %d건  (CRITICAL:%d  HIGH:%d  MEDIUM:%d  LOW:%d)\n",
+        (int)g_findings.size(), nCrit, nHigh, nMed, nLow);
+    report += sumBuf;
+    report += L"\n";
+    report += L"================================================================\n\n";
+
+    // Per-finding details
+    for (int i = 0; i < (int)g_findings.size(); ++i) {
+        const Finding& f = g_findings[i];
+        wchar_t hdr[64] = {};
+        swprintf_s(hdr, L"[%d / %d]\n", i + 1, (int)g_findings.size());
+        report += hdr;
+        report += L"  심각도   : " + f.severity + L"\n";
+        report += L"  규칙     : " + f.rule     + L"\n";
+        report += L"  파일     : " + f.file     + L"\n";
+        wchar_t lineBuf[32] = {};
+        swprintf_s(lineBuf, L"%d", f.line);
+        report += L"  줄 번호  : ";
+        report += lineBuf;
+        report += L"\n";
+        report += L"  메시지   : " + f.message  + L"\n";
+        report += L"  힙 영향  : ";
+        report += HeapImpact(f.rule, f.severity);
+        report += L"\n";
+        report += L"----------------------------------------------------------------\n";
+    }
+
+    report += L"\n[보고서 끝]\n";
+
+    // ── Convert to UTF-8 ──────────────────────────────────────────────────────
+    int bytes = WideCharToMultiByte(CP_UTF8, 0,
+                                    report.c_str(), -1,
+                                    nullptr, 0, nullptr, nullptr);
+    if (bytes <= 0) {
+        MessageBoxW(g_hWnd, L"인코딩 변환에 실패했습니다.", L"오류", MB_ICONERROR);
+        return;
+    }
+    std::string utf8(bytes - 1, '\0');
+    WideCharToMultiByte(CP_UTF8, 0, report.c_str(), -1,
+                        &utf8[0], bytes, nullptr, nullptr);
+
+    // ── Write file (UTF-8 BOM) ────────────────────────────────────────────────
+    HANDLE hFile = CreateFileW(szFile, GENERIC_WRITE, 0, nullptr,
+                               CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (hFile == INVALID_HANDLE_VALUE) {
+        MessageBoxW(g_hWnd, L"파일을 만들 수 없습니다.", L"오류", MB_ICONERROR);
+        return;
+    }
+
+    const unsigned char bom[] = { 0xEF, 0xBB, 0xBF };
+    DWORD written = 0;
+    BOOL  ok      = TRUE;
+    ok &= WriteFile(hFile, bom, 3, &written, nullptr);
+    written = 0;
+    ok &= WriteFile(hFile, utf8.c_str(), (DWORD)utf8.size(), &written, nullptr);
+    CloseHandle(hFile);
+
+    if (!ok || written != (DWORD)utf8.size()) {
+        MessageBoxW(g_hWnd, L"파일 쓰기가 완료되지 않았습니다.", L"오류", MB_ICONERROR);
+        return;
+    }
+
+    // ── Confirmation ─────────────────────────────────────────────────────────
+    std::wstring saved = szFile;
+    if (g_hStatus) SetWindowTextW(g_hStatus, (L"저장 완료: " + saved).c_str());
+    MessageBoxW(g_hWnd,
+                (L"결과를 저장했습니다:\n" + saved).c_str(),
+                L"저장 완료", MB_ICONINFORMATION);
+}
+
 // ─── Window Procedure ────────────────────────────────────────────────────────
 LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     switch (msg) {
@@ -372,9 +537,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         };
 
         g_hPath      = Make(L"EDIT",   L"", ES_AUTOHSCROLL | WS_BORDER, IDC_EDIT_PATH);
-        g_hBrowse    = Make(L"BUTTON", L"폴더 선택", BS_PUSHBUTTON,      IDC_BTN_BROWSE);
+        g_hBrowse    = Make(L"BUTTON", L"폴더 선택",    BS_PUSHBUTTON,    IDC_BTN_BROWSE);
         g_hRecursive = Make(L"BUTTON", L"하위 폴더 포함", BS_AUTOCHECKBOX, IDC_CHECK_RECURSIVE);
-        g_hAnalyze   = Make(L"BUTTON", L"분석 시작", BS_DEFPUSHBUTTON,   IDC_BTN_ANALYZE);
+        g_hAnalyze   = Make(L"BUTTON", L"분석 시작",    BS_DEFPUSHBUTTON, IDC_BTN_ANALYZE);
+        g_hSave      = Make(L"BUTTON", L"결과 저장",    BS_PUSHBUTTON,    IDC_BTN_SAVE);
 
         // ListView
         g_hList = CreateWindowExW(WS_EX_CLIENTEDGE,
@@ -435,6 +601,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             }
         } else if (id == IDC_BTN_ANALYZE && evt == BN_CLICKED) {
             DoAnalyze();
+        } else if (id == IDC_BTN_SAVE && evt == BN_CLICKED) {
+            DoSaveResults();
         }
         return 0;
     }
