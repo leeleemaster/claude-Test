@@ -436,7 +436,7 @@ static void DoSaveResults() {
     SYSTEMTIME st = {};
     GetLocalTime(&st);
     wchar_t timeBuf[64] = {};
-    swprintf_s(timeBuf, L"내보내기  : %04d-%02d-%02d %02d:%02d:%02d\n",
+    swprintf_s(timeBuf, L"내보내기 : %04d-%02d-%02d %02d:%02d:%02d\n",
                st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
     report += timeBuf;
 
@@ -450,7 +450,7 @@ static void DoSaveResults() {
     }
     wchar_t sumBuf[256] = {};
     swprintf_s(sumBuf,
-        L"총 발견   : %d건  (CRITICAL:%d  HIGH:%d  MEDIUM:%d  LOW:%d)\n",
+        L"총 발견 : %d건  (CRITICAL:%d  HIGH:%d  MEDIUM:%d  LOW:%d)\n",
         (int)g_findings.size(), nCrit, nHigh, nMed, nLow);
     report += sumBuf;
     report += L"\n";
@@ -500,14 +500,14 @@ static void DoSaveResults() {
     }
 
     const unsigned char bom[] = { 0xEF, 0xBB, 0xBF };
-    DWORD written = 0;
-    BOOL  ok      = TRUE;
-    ok &= WriteFile(hFile, bom, 3, &written, nullptr);
-    written = 0;
-    ok &= WriteFile(hFile, utf8.c_str(), (DWORD)utf8.size(), &written, nullptr);
+    DWORD bomWritten     = 0;
+    DWORD contentWritten = 0;
+    BOOL  ok             = TRUE;
+    ok &= WriteFile(hFile, bom, 3, &bomWritten, nullptr);
+    ok &= WriteFile(hFile, utf8.c_str(), (DWORD)utf8.size(), &contentWritten, nullptr);
     CloseHandle(hFile);
 
-    if (!ok || written != (DWORD)utf8.size()) {
+    if (!ok || bomWritten != 3 || contentWritten != (DWORD)utf8.size()) {
         MessageBoxW(g_hWnd, L"파일 쓰기가 완료되지 않았습니다.", L"오류", MB_ICONERROR);
         return;
     }
