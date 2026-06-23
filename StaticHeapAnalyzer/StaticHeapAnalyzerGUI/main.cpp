@@ -6,12 +6,16 @@
 #include <windows.h>
 #include <windowsx.h>
 #include <commctrl.h>
+#include <commdlg.h>
 #include <shlobj.h>
 
 #include <string>
 #include <vector>
 #include <fstream>
 #include <algorithm>
+#include <ctime>
+
+#pragma comment(lib, "comdlg32.lib")
 
 #include "resource.h"
 
@@ -24,6 +28,7 @@
 #define IDC_BTN_ANALYZE     1006
 #define IDC_LIST_RESULTS    1007
 #define IDC_STATIC_STATUS   1008
+#define IDC_BTN_SAVE        1009
 
 // ─── Finding ─────────────────────────────────────────────────────────────────
 struct Finding {
@@ -141,6 +146,7 @@ static HWND g_hPath      = nullptr;
 static HWND g_hBrowse    = nullptr;
 static HWND g_hRecursive = nullptr;
 static HWND g_hAnalyze   = nullptr;
+static HWND g_hSave      = nullptr;
 static HWND g_hList      = nullptr;
 static HWND g_hStatus    = nullptr;
 
@@ -168,8 +174,10 @@ static void DoLayout(HWND hWnd) {
     if (g_hRecursive) MoveWindow(g_hRecursive, R - checkW, y, checkW, ROW, TRUE);
     y += ROW + GAP;
 
-    // Row 3: analyze button
-    if (g_hAnalyze) MoveWindow(g_hAnalyze, M, y, R - M, 28, TRUE);
+    // Row 3: analyze + save buttons
+    const int saveW = 85;
+    if (g_hAnalyze) MoveWindow(g_hAnalyze, M, y, R - M - GAP - saveW, 28, TRUE);
+    if (g_hSave)    MoveWindow(g_hSave,    R - saveW, y, saveW, 28, TRUE);
     y += 28 + GAP;
 
     // Status bar
@@ -254,6 +262,116 @@ static std::wstring GetCliExe() {
     WriteFile(hFile, pData, size, &written, nullptr);
     CloseHandle(hFile);
     return (written == size) ? exePath : std::wstring{};
+}
+
+// ─── Heap impact mapping ─────────────────────────────────────────────────────
+struct HeapImpactInfo {
+    const wchar_t* category;
+    const wchar_t* explanation;
+};
+
+static HeapImpactInfo GetHeapImpact(const std::wstring& rule) {
+    struct Entry { const wchar_t* prefix; HeapImpactInfo info; };
+    static const Entry kMap[] = {
+        { L"R1",         { L"직접적 (DIRECT)",        L"Potential out-of-bounds write/copy can directly corrupt adjacent memory or heap-managed buffers." } },
+        { L"R2",         { L"직접적 (DIRECT)",        L"Mismatched new/delete or new[]/delete[] can corrupt allocator-managed heap state." } },
+        { L"R3",         { L"직접적 (DIRECT)",        L"Mixing new/delete with malloc/free can directly break heap management." } },
+        { L"R4",         { L"가능성 있음 (POSSIBLE)",  L"sizeof(pointer) misuse may under-initialize/copy memory and contribute to later heap misuse." } },
+        { L"R5",         { L"간접적 (INDIRECT)",       L"Zero-length memset is more of a logic/init defect than direct heap corruption by itself." } },
+        { L"R6",         { L"가능성 있음 (POSSIBLE)",  L"Off-by-one indexing can become an out-of-bounds write/read depending on actual access." } },
+        { L"R7",         { L"가능성 있음 (POSSIBLE)",  L"Missing ReleaseBuffer() can violate buffer ownership/contract and lead to later memory problems." } },
+        { L"R9",         { L"직접적 (DIRECT)",        L"Double free is a classic direct heap corruption pattern." } },
+        { L"ALLOC-001",  { L"가능성 있음 (POSSIBLE)",  L"Using raw allocated storage without proper object initialization can trigger invalid memory behavior." } },
+        { L"CTOR-001",   { L"가능성 있음 (POSSIBLE)",  L"Uninitialized pointer member use may dereference invalid memory and can lead to heap corruption." } },
+        { L"STACK-001",  { L"직접적 (DIRECT)",        L"Deleting a stack address is invalid deallocation and can directly corrupt heap internals." } },
+        { L"THREAD-001", { L"가능성 있음 (POSSIBLE)",  L"Races around shared pointer initialization/access can lead to double free, leaks, or corrupted memory state." } },
+    };
+    for (const auto& e : kMap) {
+        std::wstring pre(e.prefix);
+        if (rule == pre) return e.info;
+        if (rule.size() > pre.size() && rule.compare(0, pre.size(), pre) == 0) {
+            wchar_t next = rule[pre.size()];
+            if (next == L'-' || next == L'_') return e.info;
+        }
+    }
+    return { L"검토 필요 (REVIEW)", L"This finding may affect memory safety depending on context and should be reviewed manually." };
+}
+
+// ─── Save / Export ───────────────────────────────────────────────────────────
+static void DoSave() {
+    if (g_findings.empty()) {
+        MessageBoxW(g_hWnd, L"저장할 결과가 없습니다. 먼저 분석을 실행하세요.",
+                    L"알림", MB_ICONINFORMATION);
+        return;
+    }
+
+    wchar_t szFile[MAX_PATH] = L"HeapAnalysisReport.txt";
+    OPENFILENAMEW ofn = {};
+    ofn.lStructSize = sizeof(ofn);
+    ofn.hwndOwner   = g_hWnd;
+    ofn.lpstrFilter = L"텍스트 파일 (*.txt)\0*.txt\0모든 파일 (*.*)\0*.*\0";
+    ofn.lpstrFile   = szFile;
+    ofn.nMaxFile    = MAX_PATH;
+    ofn.lpstrDefExt = L"txt";
+    ofn.Flags       = OFN_OVERWRITEPROMPT | OFN_PATHMUSTEXIST;
+
+    if (!GetSaveFileNameW(&ofn)) return; // user cancelled
+
+    // Get analysis path
+    wchar_t pathBuf[MAX_PATH] = {};
+    if (g_hPath) GetWindowTextW(g_hPath, pathBuf, MAX_PATH);
+    std::wstring srcPath = TrimW(pathBuf);
+
+    // Timestamp
+    time_t now = time(nullptr);
+    struct tm tm_info = {};
+    localtime_s(&tm_info, &now);
+    wchar_t timeBuf[64] = {};
+    wcsftime(timeBuf, 64, L"%Y-%m-%d %H:%M:%S", &tm_info);
+
+    // Build report text
+    std::wstring report;
+    report += L"========================================\r\n";
+    report += L"  Static Heap Analyzer - 분석 결과 보고서\r\n";
+    report += L"========================================\r\n";
+    report += L"분석 대상: " + (srcPath.empty() ? std::wstring(L"(경로 없음)") : srcPath) + L"\r\n";
+    report += L"생성 시각: " + std::wstring(timeBuf) + L"\r\n";
+    report += L"총 발견 건수: " + std::to_wstring((int)g_findings.size()) + L"건\r\n";
+    report += L"========================================\r\n\r\n";
+
+    for (int i = 0; i < (int)g_findings.size(); ++i) {
+        const Finding& f = g_findings[i];
+        HeapImpactInfo hi = GetHeapImpact(f.rule);
+        report += L"[" + std::to_wstring(i + 1) + L"]\r\n";
+        report += L"심각도:    " + f.severity + L"\r\n";
+        report += L"규칙:      " + f.rule + L"\r\n";
+        report += L"파일:      " + f.file + L"\r\n";
+        report += L"줄 번호:   " + std::to_wstring(f.line) + L"\r\n";
+        report += L"메시지:    " + f.message + L"\r\n";
+        report += L"힙 영향:   " + std::wstring(hi.category) + L"\r\n";
+        report += L"영향 설명: " + std::wstring(hi.explanation) + L"\r\n";
+        report += L"----------------------------------------\r\n";
+    }
+
+    // Write UTF-8 with BOM
+    std::ofstream ofs(szFile, std::ios::binary);
+    if (!ofs) {
+        MessageBoxW(g_hWnd, L"파일 쓰기 실패.", L"오류", MB_ICONERROR);
+        return;
+    }
+    ofs << "\xEF\xBB\xBF"; // UTF-8 BOM
+    int bytes = WideCharToMultiByte(CP_UTF8, 0, report.c_str(), -1, nullptr, 0, nullptr, nullptr);
+    if (bytes > 1) {
+        std::string utf8(bytes - 1, '\0');
+        WideCharToMultiByte(CP_UTF8, 0, report.c_str(), -1, &utf8[0], bytes, nullptr, nullptr);
+        ofs << utf8;
+    }
+    ofs.close();
+
+    std::wstring saved = std::wstring(szFile);
+    if (g_hStatus) SetWindowTextW(g_hStatus, (L"저장 완료: " + saved).c_str());
+    MessageBoxW(g_hWnd, (L"보고서가 저장되었습니다:\n" + saved).c_str(),
+                L"저장 완료", MB_ICONINFORMATION);
 }
 
 // ─── Analyze ─────────────────────────────────────────────────────────────────
@@ -375,6 +493,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         g_hBrowse    = Make(L"BUTTON", L"폴더 선택", BS_PUSHBUTTON,      IDC_BTN_BROWSE);
         g_hRecursive = Make(L"BUTTON", L"하위 폴더 포함", BS_AUTOCHECKBOX, IDC_CHECK_RECURSIVE);
         g_hAnalyze   = Make(L"BUTTON", L"분석 시작", BS_DEFPUSHBUTTON,   IDC_BTN_ANALYZE);
+        g_hSave      = Make(L"BUTTON", L"저장",      BS_PUSHBUTTON,      IDC_BTN_SAVE);
 
         // ListView
         g_hList = CreateWindowExW(WS_EX_CLIENTEDGE,
@@ -435,6 +554,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             }
         } else if (id == IDC_BTN_ANALYZE && evt == BN_CLICKED) {
             DoAnalyze();
+        } else if (id == IDC_BTN_SAVE && evt == BN_CLICKED) {
+            DoSave();
         }
         return 0;
     }

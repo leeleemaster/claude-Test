@@ -8,3 +8,4 @@
 #define IDC_BTN_ANALYZE         1006
 #define IDC_LIST_RESULTS        1007
 #define IDC_STATIC_STATUS       1008
+#define IDC_BTN_SAVE            1009
