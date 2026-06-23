@@ -362,7 +362,7 @@ static void DoSave() {
     }
     ofs << "\xEF\xBB\xBF"; // UTF-8 BOM
     int bytes = WideCharToMultiByte(CP_UTF8, 0, report.c_str(), -1, nullptr, 0, nullptr, nullptr);
-    if (bytes <= 1) {
+    if (bytes <= 0) {
         ofs.close();
         MessageBoxW(g_hWnd, L"문자열 변환 실패.", L"오류", MB_ICONERROR);
         return;
