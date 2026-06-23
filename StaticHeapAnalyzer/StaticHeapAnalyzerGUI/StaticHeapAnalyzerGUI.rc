@@ -7,6 +7,9 @@
 // Embed Common Controls v6 manifest (enables visual styles)
 1 RT_MANIFEST "StaticHeapAnalyzerGUI.exe.manifest"
 
+// Embed CLI executable as binary resource
+IDR_CLI_EXE RCDATA "../StaticHeapAnalyzer/StaticHeapAnalyzer.exe"
+
 LANGUAGE LANG_KOREAN, SUBLANG_KOREAN
 
 /////////////////////////////////////////////////////////////////////////////

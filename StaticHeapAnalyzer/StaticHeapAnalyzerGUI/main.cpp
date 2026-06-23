@@ -13,6 +13,8 @@
 #include <fstream>
 #include <algorithm>
 
+#include "resource.h"
+
 // ─── Control IDs ─────────────────────────────────────────────────────────────
 #define IDC_EDIT_PATH       1001
 #define IDC_BTN_BROWSE      1002
@@ -220,14 +222,38 @@ static void ListAdd(const Finding& f, int idx) {
     ListView_SetItemText(g_hList, idx, 4, const_cast<LPWSTR>(lineStr.c_str()));
 }
 
-// ─── Find CLI exe ─────────────────────────────────────────────────────────────
-static std::wstring FindCliExe() {
+// ─── Extract embedded CLI exe to %TEMP% ──────────────────────────────────────
+static std::wstring GetCliExe() {
+    // 1) same directory as GUI exe
     wchar_t selfPath[MAX_PATH] = {};
     GetModuleFileNameW(nullptr, selfPath, MAX_PATH);
     std::wstring dir(selfPath);
     size_t slash = dir.find_last_of(L"\\/");
     if (slash != std::wstring::npos) dir = dir.substr(0, slash + 1);
-    return dir + L"StaticHeapAnalyzer.exe";
+    std::wstring sameDir = dir + L"StaticHeapAnalyzer.exe";
+    if (GetFileAttributesW(sameDir.c_str()) != INVALID_FILE_ATTRIBUTES)
+        return sameDir;
+
+    // 2) extract from embedded resource
+    HRSRC hRes = FindResourceW(nullptr, MAKEINTRESOURCEW(IDR_CLI_EXE), L"RCDATA");
+    if (!hRes) return {};
+    HGLOBAL hGlob = LoadResource(nullptr, hRes);
+    if (!hGlob) return {};
+    void*  pData = LockResource(hGlob);
+    DWORD  size  = SizeofResource(nullptr, hRes);
+    if (!pData || size == 0) return {};
+
+    wchar_t tempDir[MAX_PATH] = {};
+    GetTempPathW(MAX_PATH, tempDir);
+    std::wstring exePath = std::wstring(tempDir) + L"StaticHeapAnalyzer.exe";
+
+    HANDLE hFile = CreateFileW(exePath.c_str(), GENERIC_WRITE, 0, nullptr,
+                               CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (hFile == INVALID_HANDLE_VALUE) return {};
+    DWORD written = 0;
+    WriteFile(hFile, pData, size, &written, nullptr);
+    CloseHandle(hFile);
+    return (written == size) ? exePath : std::wstring{};
 }
 
 // ─── Analyze ─────────────────────────────────────────────────────────────────
@@ -250,7 +276,12 @@ static void DoAnalyze() {
     // Delete old report
     DeleteFileW(jsonOut.c_str());
 
-    std::wstring cli = FindCliExe();
+    std::wstring cli = GetCliExe();
+    if (cli.empty()) {
+        MessageBoxW(g_hWnd, L"StaticHeapAnalyzer.exe 를 찾거나 추출할 수 없습니다.",
+                    L"오류", MB_ICONERROR);
+        return;
+    }
     std::wstring cmd = L"\"" + cli + L"\" --src \"" + srcPath + L"\" --report json";
     if (recursive) cmd += L" --recursive";
 
@@ -286,8 +317,7 @@ static void DoAnalyze() {
     if (!ok) {
         CloseHandle(hRead);
         if (g_hAnalyze) EnableWindow(g_hAnalyze, TRUE);
-        std::wstring msg = L"StaticHeapAnalyzer.exe 를 실행할 수 없습니다.\n경로: " + cli;
-        MessageBoxW(g_hWnd, msg.c_str(), L"오류", MB_ICONERROR);
+        MessageBoxW(g_hWnd, L"분석기 실행 실패", L"오류", MB_ICONERROR);
         if (g_hStatus) SetWindowTextW(g_hStatus, L"실패");
         return;
     }
