@@ -162,9 +162,9 @@ struct HeapImpactInfo {
     const wchar_t* reason;
 };
 
-static bool HasRulePrefix(const std::wstring& rule, const wchar_t* prefix) {
-    if (!prefix) return false;
-    size_t n = wcslen(prefix);
+template <size_t N>
+static bool HasRulePrefix(const std::wstring& rule, const wchar_t (&prefix)[N]) {
+    const size_t n = N - 1;
     if (rule.size() < n) return false;
     for (size_t i = 0; i < n; ++i) {
         wchar_t a = (wchar_t)towupper(rule[i]);
@@ -174,6 +174,22 @@ static bool HasRulePrefix(const std::wstring& rule, const wchar_t* prefix) {
     if (rule.size() == n) return true;
     wchar_t next = rule[n];
     return !(iswalnum(next) || next == L'_');
+}
+
+static std::wstring FormatLocalTime(const SYSTEMTIME& st) {
+    std::wstring t;
+    t += std::to_wstring((int)st.wYear) + L"-";
+    if (st.wMonth < 10) t += L"0";
+    t += std::to_wstring((int)st.wMonth) + L"-";
+    if (st.wDay < 10) t += L"0";
+    t += std::to_wstring((int)st.wDay) + L" ";
+    if (st.wHour < 10) t += L"0";
+    t += std::to_wstring((int)st.wHour) + L":";
+    if (st.wMinute < 10) t += L"0";
+    t += std::to_wstring((int)st.wMinute) + L":";
+    if (st.wSecond < 10) t += L"0";
+    t += std::to_wstring((int)st.wSecond);
+    return t;
 }
 
 static HeapImpactInfo GetHeapImpact(const Finding& f) {
@@ -234,8 +250,8 @@ static void DoSaveReport() {
     SYSTEMTIME st = {};
     GetLocalTime(&st);
     int critical = 0, high = 0, medium = 0, low = 0;
-    for (size_t i = 0; i < g_findings.size(); ++i) {
-        const std::wstring& sev = g_findings[i].severity;
+    for (const Finding& finding : g_findings) {
+        const std::wstring& sev = finding.severity;
         if (sev == L"CRITICAL") ++critical;
         else if (sev == L"HIGH") ++high;
         else if (sev == L"MEDIUM") ++medium;
@@ -247,24 +263,18 @@ static void DoSaveReport() {
     txt += L"분석 경로: ";
     txt += TrimW(srcPath);
     txt += L"\n";
-    txt += L"저장 시각: ";
-    txt += std::to_wstring((int)st.wYear) + L"-" +
-           (st.wMonth < 10 ? L"0" : L"") + std::to_wstring((int)st.wMonth) + L"-" +
-           (st.wDay < 10 ? L"0" : L"") + std::to_wstring((int)st.wDay) + L" " +
-           (st.wHour < 10 ? L"0" : L"") + std::to_wstring((int)st.wHour) + L":" +
-           (st.wMinute < 10 ? L"0" : L"") + std::to_wstring((int)st.wMinute) + L":" +
-           (st.wSecond < 10 ? L"0" : L"") + std::to_wstring((int)st.wSecond) + L"\n";
+    txt += L"저장 시각: " + FormatLocalTime(st) + L"\n";
     txt += L"총 결과: " + std::to_wstring((int)g_findings.size()) + L"건\n";
     txt += L"심각도 요약: CRITICAL " + std::to_wstring(critical)
         + L", HIGH " + std::to_wstring(high)
         + L", MEDIUM " + std::to_wstring(medium)
         + L", LOW " + std::to_wstring(low) + L"\n\n";
 
-    for (size_t i = 0; i < g_findings.size(); ++i) {
-        const Finding& f = g_findings[i];
+    int itemNo = 1;
+    for (const Finding& f : g_findings) {
         HeapImpactInfo impact = GetHeapImpact(f);
         txt += L"[";
-        txt += std::to_wstring((int)i + 1);
+        txt += std::to_wstring(itemNo++);
         txt += L"]\n";
         txt += L"심각도: ";
         txt += f.severity;

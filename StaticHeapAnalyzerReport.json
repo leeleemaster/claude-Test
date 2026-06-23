@@ -1,56 +1,92 @@
 [
   {
-    "severity": "CRITICAL",
-    "file": "StaticHeapAnalyzer/test_samples/bad_sample.cpp",
-    "line": 49,
-    "rule": "STACK-001",
-    "code": "    delete p;",
-    "message": "스택 객체 주소를 가진 포인터 'p' 에 delete 사용 — 힙이 아닌 메모리 해제로 힙 관리 구조 손상",
-    "fix": "스택 객체는 delete 하지 않음 (힙 할당이 필요하면 new 로 생성)"
-  },
-  {
     "severity": "HIGH",
-    "file": "StaticHeapAnalyzer/test_samples/bad_sample.cpp",
-    "line": 12,
-    "rule": "CTOR-001",
-    "code": "    void Use() { m_bar->DoSth(); }",
-    "message": "포인터 멤버 'm_bar' 를 생성자에서 초기화하지 않은 채 사용 — 미초기화 포인터 역참조로 임의 메모리/힙 손상",
-    "fix": "생성자 초기화 리스트 또는 본문에서 'm_bar' 를 NULL/유효 객체로 초기화"
-  },
-  {
-    "severity": "HIGH",
-    "file": "StaticHeapAnalyzer/test_samples/bad_sample.cpp",
-    "line": 29,
-    "rule": "R2-new-delete-mismatch",
-    "code": "    delete p;",
-    "message": "(할당: 28번 줄) new[] 로 할당했는데 delete 로 해제 — 배열 헤더/소멸자 처리가 어긋나 힙이 손상",
-    "fix": "delete[] p; 로 해제"
-  },
-  {
-    "severity": "HIGH",
-    "file": "StaticHeapAnalyzer/test_samples/bad_sample.cpp",
-    "line": 35,
+    "file": "StaticHeapAnalyzer/test_samples/rule_samples.cpp",
+    "line": 10,
     "rule": "R1-overrun",
-    "code": "        strcpy(buf, src);",
+    "code": "    strcpy(buf, src);            // R1",
     "message": "경계 검사 없는 복사/포맷 함수 'strcpy' 호출 — 대상 버퍼를 넘겨 쓰면 인접 힙 블록 메타데이터가 손상될 수 있음",
     "fix": "길이 제한 버전(strncpy_s / StringCchCopy / _snprintf 등) 사용 및 대상 버퍼 크기 검증"
   },
   {
     "severity": "HIGH",
-    "file": "StaticHeapAnalyzer/test_samples/bad_sample.cpp",
-    "line": 41,
-    "rule": "ALLOC-001",
-    "code": "    MyObj* p = (MyObj*)::operator new(sizeof(MyObj));",
-    "message": "::operator new 직접 호출 후 placement new 초기화 없이 사용 — 생성자 미실행 객체 접근으로 힙/객체 상태 손상",
-    "fix": "::operator new 결과에 placement new(T(...))로 생성자 호출 후 사용"
+    "file": "StaticHeapAnalyzer/test_samples/rule_samples.cpp",
+    "line": 16,
+    "rule": "R2-new-delete-mismatch",
+    "code": "    delete p;                    // R2",
+    "message": "(할당: 15번 줄) new[] 로 할당했는데 delete 로 해제 — 배열 헤더/소멸자 처리가 어긋나 힙이 손상",
+    "fix": "delete[] p; 로 해제"
+  },
+  {
+    "severity": "HIGH",
+    "file": "StaticHeapAnalyzer/test_samples/rule_samples.cpp",
+    "line": 22,
+    "rule": "R2-new-delete-mismatch",
+    "code": "    delete[] q;                  // R2",
+    "message": "(할당: 21번 줄) new 로 할당했는데 delete[] 로 해제 — 배열 처리가 어긋나 힙이 손상",
+    "fix": "delete q; 로 해제"
+  },
+  {
+    "severity": "HIGH",
+    "file": "StaticHeapAnalyzer/test_samples/rule_samples.cpp",
+    "line": 28,
+    "rule": "R3-new-free-mix",
+    "code": "    delete a;                    // R3",
+    "message": "(할당: 27번 줄) malloc 계열로 할당했는데 delete 로 해제 — 할당자 관리 구조가 달라 free list 파괴",
+    "fix": "free(a); 로 해제"
+  },
+  {
+    "severity": "HIGH",
+    "file": "StaticHeapAnalyzer/test_samples/rule_samples.cpp",
+    "line": 30,
+    "rule": "R3-new-free-mix",
+    "code": "    free(b);                     // R3",
+    "message": "(할당: 29번 줄) new 로 할당했는데 free() 로 해제 — 두 할당자의 내부 관리 구조가 달라 free list 파괴",
+    "fix": "delete b; 로 해제"
+  },
+  {
+    "severity": "HIGH",
+    "file": "StaticHeapAnalyzer/test_samples/rule_samples.cpp",
+    "line": 61,
+    "rule": "R9-double-free",
+    "code": "    delete p;                    // R9",
+    "message": "(할당: 59번 줄) 변수 'p' 가 재할당 없이 2회 해제됨 — free list 가 손상될 수 있음",
+    "fix": "해제 후 NULL 대입, 또는 중복 해제 제거"
   },
   {
     "severity": "MEDIUM",
-    "file": "StaticHeapAnalyzer/test_samples/bad_sample.cpp",
-    "line": 22,
-    "rule": "THREAD-001",
-    "code": "    if (!g_instance) {",
-    "message": "static/global 포인터 'g_instance' 접근(지연 초기화 등) 시 Lock 미사용 — 경합으로 이중 할당/해제 발생 가능",
-    "fix": "lock_guard/CriticalSection 으로 보호하거나 std::call_once 사용"
+    "file": "StaticHeapAnalyzer/test_samples/rule_samples.cpp",
+    "line": 35,
+    "rule": "R4-sizeof-ptr",
+    "code": "    memset(p, 0, sizeof(p));     // R4",
+    "message": "대상과 sizeof 인자가 동일 식별자 'p' — 그 변수가 포인터면 sizeof 가 포인터 크기(4/8B)가 되어 잘못된 크기로 동작 (배열이면 정상)",
+    "fix": "버퍼 실제 크기(원소수 * sizeof(원소형) 또는 정의된 길이 상수) 사용"
+  },
+  {
+    "severity": "MEDIUM",
+    "file": "StaticHeapAnalyzer/test_samples/rule_samples.cpp",
+    "line": 40,
+    "rule": "R5-memset-zero",
+    "code": "    memset(p, 1, 0);             // R5",
+    "message": "memset 의 길이 인자가 리터럴 0 — 인자 순서(대상,값,길이) 혼동 의심 (실제로 아무것도 지워지지 않음)",
+    "fix": "memset(dst, 0, size) 형태로 값/길이 인자 위치 점검"
+  },
+  {
+    "severity": "MEDIUM",
+    "file": "StaticHeapAnalyzer/test_samples/rule_samples.cpp",
+    "line": 47,
+    "rule": "R6-off-by-one",
+    "code": "        arr[i] = i;              // R6",
+    "message": "for 루프 조건 'i <= N' 과 동일 카운터 'i' 로 배열 인덱싱 — 마지막 한 칸을 넘겨 써서 경계 침범 가능",
+    "fix": "루프 조건을 'i < N' 으로 수정하거나 인덱스 상한을 재확인"
+  },
+  {
+    "severity": "MEDIUM",
+    "file": "StaticHeapAnalyzer/test_samples/rule_samples.cpp",
+    "line": 53,
+    "rule": "R7-getbuffer",
+    "code": "",
+    "message": "CString::GetBuffer() 호출에 짝이 되는 ReleaseBuffer() 가 같은 함수에 없음 — 요청 길이 초과 기록·해제 누락 시 CString 내부 힙 손상",
+    "fix": "기록 후 ReleaseBuffer() 호출 (필요 길이를 GetBuffer(n) 인자로 충분히 확보)"
   }
 ]
