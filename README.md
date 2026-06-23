@@ -85,7 +85,7 @@ void PrintHeap() {
     PROCESS_MEMORY_COUNTERS m = { sizeof(m) };
     GetProcessMemoryInfo(GetCurrentProcess(), &m, sizeof(m));
     char s[128];
-    sprintf_s(s, "WS: %zu MB / Peak: %zu MB\n",
+    sprintf_s(s, "WS: %Iu MB / Peak: %Iu MB\n",
         m.WorkingSetSize >> 20, m.PeakWorkingSetSize >> 20);
     OutputDebugStringA(s);
 }
