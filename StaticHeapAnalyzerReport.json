@@ -1,0 +1,56 @@
+[
+  {
+    "severity": "CRITICAL",
+    "file": "StaticHeapAnalyzer/test_samples/bad_sample.cpp",
+    "line": 49,
+    "rule": "STACK-001",
+    "code": "    delete p;",
+    "message": "스택 객체 주소를 가진 포인터 'p' 에 delete 사용 — 힙이 아닌 메모리 해제로 힙 관리 구조 손상",
+    "fix": "스택 객체는 delete 하지 않음 (힙 할당이 필요하면 new 로 생성)"
+  },
+  {
+    "severity": "HIGH",
+    "file": "StaticHeapAnalyzer/test_samples/bad_sample.cpp",
+    "line": 12,
+    "rule": "CTOR-001",
+    "code": "    void Use() { m_bar->DoSth(); }",
+    "message": "포인터 멤버 'm_bar' 를 생성자에서 초기화하지 않은 채 사용 — 미초기화 포인터 역참조로 임의 메모리/힙 손상",
+    "fix": "생성자 초기화 리스트 또는 본문에서 'm_bar' 를 NULL/유효 객체로 초기화"
+  },
+  {
+    "severity": "HIGH",
+    "file": "StaticHeapAnalyzer/test_samples/bad_sample.cpp",
+    "line": 29,
+    "rule": "R2-new-delete-mismatch",
+    "code": "    delete p;",
+    "message": "(할당: 28번 줄) new[] 로 할당했는데 delete 로 해제 — 배열 헤더/소멸자 처리가 어긋나 힙이 손상",
+    "fix": "delete[] p; 로 해제"
+  },
+  {
+    "severity": "HIGH",
+    "file": "StaticHeapAnalyzer/test_samples/bad_sample.cpp",
+    "line": 35,
+    "rule": "R1-overrun",
+    "code": "        strcpy(buf, src);",
+    "message": "경계 검사 없는 복사/포맷 함수 'strcpy' 호출 — 대상 버퍼를 넘겨 쓰면 인접 힙 블록 메타데이터가 손상될 수 있음",
+    "fix": "길이 제한 버전(strncpy_s / StringCchCopy / _snprintf 등) 사용 및 대상 버퍼 크기 검증"
+  },
+  {
+    "severity": "HIGH",
+    "file": "StaticHeapAnalyzer/test_samples/bad_sample.cpp",
+    "line": 41,
+    "rule": "ALLOC-001",
+    "code": "    MyObj* p = (MyObj*)::operator new(sizeof(MyObj));",
+    "message": "::operator new 직접 호출 후 placement new 초기화 없이 사용 — 생성자 미실행 객체 접근으로 힙/객체 상태 손상",
+    "fix": "::operator new 결과에 placement new(T(...))로 생성자 호출 후 사용"
+  },
+  {
+    "severity": "MEDIUM",
+    "file": "StaticHeapAnalyzer/test_samples/bad_sample.cpp",
+    "line": 22,
+    "rule": "THREAD-001",
+    "code": "    if (!g_instance) {",
+    "message": "static/global 포인터 'g_instance' 접근(지연 초기화 등) 시 Lock 미사용 — 경합으로 이중 할당/해제 발생 가능",
+    "fix": "lock_guard/CriticalSection 으로 보호하거나 std::call_once 사용"
+  }
+]
