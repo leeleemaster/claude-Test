@@ -25,10 +25,9 @@
   <ItemGroup>
     <ClCompile Include="main.cpp"><Filter>Source Files</Filter></ClCompile>
     <ClCompile Include="TokenScanner.cpp"><Filter>Source Files</Filter></ClCompile>
-    <ClCompile Include="SymbolTable.cpp"><Filter>Source Files</Filter></ClCompile>
     <ClCompile Include="RuleEngine.cpp"><Filter>Source Files</Filter></ClCompile>
-    <ClCompile Include="analyzers\HeapMismatchAnalyzer.cpp"><Filter>Source Files\analyzers</Filter></ClCompile>
-    <ClCompile Include="analyzers\BufferOverrunAnalyzer.cpp"><Filter>Source Files\analyzers</Filter></ClCompile>
+    <ClCompile Include="analyzers\LineRuleAnalyzer.cpp"><Filter>Source Files\analyzers</Filter></ClCompile>
+    <ClCompile Include="analyzers\ScopeRuleAnalyzer.cpp"><Filter>Source Files\analyzers</Filter></ClCompile>
     <ClCompile Include="analyzers\CtorInitAnalyzer.cpp"><Filter>Source Files\analyzers</Filter></ClCompile>
     <ClCompile Include="analyzers\ThreadSafetyAnalyzer.cpp"><Filter>Source Files\analyzers</Filter></ClCompile>
     <ClCompile Include="analyzers\AllocatorAnalyzer.cpp"><Filter>Source Files\analyzers</Filter></ClCompile>
@@ -37,10 +36,9 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="TokenScanner.h"><Filter>Header Files</Filter></ClInclude>
-    <ClInclude Include="SymbolTable.h"><Filter>Header Files</Filter></ClInclude>
     <ClInclude Include="RuleEngine.h"><Filter>Header Files</Filter></ClInclude>
-    <ClInclude Include="analyzers\HeapMismatchAnalyzer.h"><Filter>Header Files\analyzers</Filter></ClInclude>
-    <ClInclude Include="analyzers\BufferOverrunAnalyzer.h"><Filter>Header Files\analyzers</Filter></ClInclude>
+    <ClInclude Include="analyzers\LineRuleAnalyzer.h"><Filter>Header Files\analyzers</Filter></ClInclude>
+    <ClInclude Include="analyzers\ScopeRuleAnalyzer.h"><Filter>Header Files\analyzers</Filter></ClInclude>
     <ClInclude Include="analyzers\CtorInitAnalyzer.h"><Filter>Header Files\analyzers</Filter></ClInclude>
     <ClInclude Include="analyzers\ThreadSafetyAnalyzer.h"><Filter>Header Files\analyzers</Filter></ClInclude>
     <ClInclude Include="analyzers\AllocatorAnalyzer.h"><Filter>Header Files\analyzers</Filter></ClInclude>

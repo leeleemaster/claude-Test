@@ -12,9 +12,10 @@ void CtorInitAnalyzer::Analyze(const std::string& file, const std::vector<TokenL
     std::map<std::string, int> ptrMembers;
     std::map<std::string, bool> initialized;
     std::map<std::string, int> usedLine;
+    std::map<std::string, std::string> usedText;
 
     for (size_t i = 0; i < tokens.size(); ++i) {
-        const std::string& line = tokens[i].text;
+        const std::string& line = tokens[i].clean;
         std::smatch match;
 
         if (!inClass && std::regex_search(line, match, classRegex)) {
@@ -47,6 +48,7 @@ void CtorInitAnalyzer::Analyze(const std::string& file, const std::vector<TokenL
         for (std::map<std::string, int>::const_iterator it = ptrMembers.begin(); it != ptrMembers.end(); ++it) {
             if (line.find(it->first + "->") != std::string::npos) {
                 usedLine[it->first] = tokens[i].line;
+                usedText[it->first] = tokens[i].text;
             }
             if (line.find(it->first + " =") != std::string::npos) {
                 initialized[it->first] = true;
@@ -62,7 +64,9 @@ void CtorInitAnalyzer::Analyze(const std::string& file, const std::vector<TokenL
                     finding.file = file;
                     finding.line = usedLine[member];
                     finding.rule = "CTOR-001";
-                    finding.message = "포인터 멤버 '" + member + "' 생성자 미초기화 상태에서 사용";
+                    finding.message = "포인터 멤버 '" + member + "' 를 생성자에서 초기화하지 않은 채 사용 — 미초기화 포인터 역참조로 임의 메모리/힙 손상";
+                    finding.fix = "생성자 초기화 리스트 또는 본문에서 '" + member + "' 를 NULL/유효 객체로 초기화";
+                    finding.code = usedText.count(member) ? usedText[member] : std::string();
                     findings.push_back(finding);
                 }
             }

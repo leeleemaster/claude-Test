@@ -45,6 +45,41 @@ void CollectFiles(const fs::path& src, bool recursive, std::vector<std::string>&
     }
 }
 
+bool FindingLess(const Finding& a, const Finding& b) {
+    int ra = SeverityRank(a.severity);
+    int rb = SeverityRank(b.severity);
+    if (ra != rb) return ra < rb;
+    if (a.file != b.file) return a.file < b.file;
+    if (a.line != b.line) return a.line < b.line;
+    return a.rule < b.rule;
+}
+
+// 심각도/경로/줄번호 정렬 후 (file,line,rule) 기준 중복 제거 (설계 render)
+void SortAndDedup(std::vector<Finding>& findings) {
+    std::sort(findings.begin(), findings.end(), FindingLess);
+    std::vector<Finding> unique;
+    for (size_t i = 0; i < findings.size(); ++i) {
+        const Finding& f = findings[i];
+        if (!unique.empty()) {
+            const Finding& p = unique.back();
+            if (p.file == f.file && p.line == f.line && p.rule == f.rule) {
+                continue;
+            }
+        }
+        unique.push_back(f);
+    }
+    findings.swap(unique);
+}
+
+bool HasHighSeverity(const std::vector<Finding>& findings) {
+    for (size_t i = 0; i < findings.size(); ++i) {
+        if (findings[i].severity == Severity::CRITICAL || findings[i].severity == Severity::HIGH) {
+            return true;
+        }
+    }
+    return false;
+}
+
 std::set<std::string> ParseRules(const std::string& rulesArg) {
     std::set<std::string> rules;
     std::string token;
@@ -85,7 +120,7 @@ int main(int argc, char* argv[]) {
     }
 
     if (src.empty()) {
-        std::cerr << "Usage: StaticHeapAnalyzer.exe --src <file-or-dir> [--report console|html|json] [--rules HEAP-001,HEAP-002,...] [--recursive]" << std::endl;
+        std::cerr << "Usage: StaticHeapAnalyzer.exe --src <file-or-dir> [--report console|html|json] [--rules R1,R2,...,ALLOC-001,...] [--recursive]" << std::endl;
         return 1;
     }
 
@@ -113,6 +148,8 @@ int main(int argc, char* argv[]) {
         findings.insert(findings.end(), fileFindings.begin(), fileFindings.end());
     }
 
+    SortAndDedup(findings);
+
     if (reportType == "html") {
         std::string error;
         if (!ReportGenerator::WriteHtml(findings, "StaticHeapAnalyzerReport.html", error)) {
@@ -131,5 +168,6 @@ int main(int argc, char* argv[]) {
         ReportGenerator::PrintConsole(findings);
     }
 
-    return 0;
+    // FR-7: HIGH(이상) 발견 시 종료 코드 2 (빌드 파이프라인 통합용)
+    return HasHighSeverity(findings) ? 2 : 0;
 }
