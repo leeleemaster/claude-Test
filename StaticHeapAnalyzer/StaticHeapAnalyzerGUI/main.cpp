@@ -137,8 +137,6 @@ static COLORREF SeverityColor(const std::wstring& sev) {
 static HWND g_hWnd       = nullptr;
 static HWND g_hPath      = nullptr;
 static HWND g_hBrowse    = nullptr;
-static HWND g_hCombo     = nullptr;
-static HWND g_hRules     = nullptr;
 static HWND g_hRecursive = nullptr;
 static HWND g_hAnalyze   = nullptr;
 static HWND g_hList      = nullptr;
@@ -163,13 +161,9 @@ static void DoLayout(HWND hWnd) {
     if (g_hBrowse) MoveWindow(g_hBrowse, R - 85,  y, 85,         ROW, TRUE);
     y += ROW + GAP;
 
-    // Row 2: combo | rules | recursive
-    int comboW = 180, checkW = 120;
-    int rulesW = R - M - comboW - GAP - checkW - GAP;
-    if (rulesW < 80) rulesW = 80;
-    if (g_hCombo)     MoveWindow(g_hCombo,     M,                          y, comboW, ROW, TRUE);
-    if (g_hRules)     MoveWindow(g_hRules,     M + comboW + GAP,           y, rulesW, ROW, TRUE);
-    if (g_hRecursive) MoveWindow(g_hRecursive, M + comboW + GAP + rulesW + GAP, y, checkW, ROW, TRUE);
+    // Row 2: recursive checkbox (right-aligned)
+    int checkW = 130;
+    if (g_hRecursive) MoveWindow(g_hRecursive, R - checkW, y, checkW, ROW, TRUE);
     y += ROW + GAP;
 
     // Row 3: analyze button
@@ -246,15 +240,7 @@ static void DoAnalyze() {
         return;
     }
 
-    int sel = ComboBox_GetCurSel(g_hCombo);
-    // We always use JSON internally; the combo choice is cosmetic for now
-    (void)sel;
-
-    wchar_t rulesBuf[512] = {};
-    GetWindowTextW(g_hRules, rulesBuf, 512);
-    std::wstring rules = TrimW(rulesBuf);
-
-    bool recursive = (Button_GetCheck(g_hRecursive) == BST_CHECKED);
+    bool recursive = (g_hRecursive && Button_GetCheck(g_hRecursive) == BST_CHECKED);
 
     // temp JSON output in %TEMP%
     wchar_t tempDir[MAX_PATH] = {};
@@ -266,8 +252,7 @@ static void DoAnalyze() {
 
     std::wstring cli = FindCliExe();
     std::wstring cmd = L"\"" + cli + L"\" --src \"" + srcPath + L"\" --report json";
-    if (!rules.empty()) cmd += L" --rules \"" + rules + L"\"";
-    if (recursive)      cmd += L" --recursive";
+    if (recursive) cmd += L" --recursive";
 
     SECURITY_ATTRIBUTES sa = {};
     sa.nLength        = sizeof(sa);
@@ -358,23 +343,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
         g_hPath      = Make(L"EDIT",   L"", ES_AUTOHSCROLL | WS_BORDER, IDC_EDIT_PATH);
         g_hBrowse    = Make(L"BUTTON", L"폴더 선택", BS_PUSHBUTTON,      IDC_BTN_BROWSE);
-        g_hCombo     = Make(L"COMBOBOX", L"",
-                           CBS_DROPDOWNLIST | WS_VSCROLL, IDC_COMBO_REPORT);
-        g_hRules     = Make(L"EDIT",   L"", ES_AUTOHSCROLL | WS_BORDER, IDC_EDIT_RULES);
         g_hRecursive = Make(L"BUTTON", L"하위 폴더 포함", BS_AUTOCHECKBOX, IDC_CHECK_RECURSIVE);
         g_hAnalyze   = Make(L"BUTTON", L"분석 시작", BS_DEFPUSHBUTTON,   IDC_BTN_ANALYZE);
-
-        if (g_hCombo) {
-            ComboBox_AddString(g_hCombo, L"콘솔(JSON 표시)");
-            ComboBox_AddString(g_hCombo, L"HTML 리포트");
-            ComboBox_AddString(g_hCombo, L"JSON 리포트");
-            ComboBox_SetCurSel(g_hCombo, 0);
-        }
-
-        // Edit cue banner (Vista+)
-        if (g_hRules)
-            SendMessageW(g_hRules, EM_SETCUEBANNER, FALSE,
-                         (LPARAM)L"규칙 필터 (예: ALLOC-001,SCOPE-002)");
 
         // ListView
         g_hList = CreateWindowExW(WS_EX_CLIENTEDGE,
