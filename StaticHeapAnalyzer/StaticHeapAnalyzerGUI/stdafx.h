@@ -7,6 +7,8 @@
 #include <afxext.h>
 #include <afxcmn.h>
 #include <afxdlgs.h>
+#include <afxdialogex.h>
+
 #include <shlobj.h>
 
 #include <string>

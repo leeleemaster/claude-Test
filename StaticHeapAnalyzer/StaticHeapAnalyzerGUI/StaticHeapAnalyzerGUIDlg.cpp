@@ -221,6 +221,16 @@ bool CStaticHeapAnalyzerGUIDlg::RunAnalyzer(const CString& src, const CString& f
 
 // ─── JSON parser ─────────────────────────────────────────────────────────────
 
+// UTF-8 std::string → CString (UTF-16) without ATL dependency
+static CString Utf8ToCString(const std::string& s)
+{
+    if (s.empty()) return CString();
+    int len = MultiByteToWideChar(CP_UTF8, 0, s.c_str(), -1, NULL, 0);
+    std::wstring ws(len, L'\0');
+    MultiByteToWideChar(CP_UTF8, 0, s.c_str(), -1, &ws[0], len);
+    return CString(ws.c_str());
+}
+
 static std::string ExtractStr(const std::string& obj, const char* key)
 {
     std::string k = std::string("\"") + key + "\":\"";
@@ -258,7 +268,7 @@ static int ExtractInt(const std::string& obj, const char* key)
 
 bool CStaticHeapAnalyzerGUIDlg::ParseJsonReport(const CString& jsonPath)
 {
-    std::ifstream ifs(CT2A(jsonPath, CP_UTF8));
+    std::ifstream ifs(static_cast<LPCWSTR>(jsonPath));
     if (!ifs) {
         MessageBox(_T("JSON 보고서 파일을 읽을 수 없습니다.\n분석 결과가 없거나 경로가 잘못되었습니다."),
                    _T("파일 오류"), MB_OK | MB_ICONERROR);
@@ -301,12 +311,12 @@ bool CStaticHeapAnalyzerGUIDlg::ParseJsonReport(const CString& jsonPath)
         std::string obj = json.substr(pos, end - pos);
 
         FindingItem fi;
-        fi.severity = CString(CA2T(ExtractStr(obj, "severity").c_str(), CP_UTF8));
-        fi.file     = CString(CA2T(ExtractStr(obj, "file"    ).c_str(), CP_UTF8));
-        fi.rule     = CString(CA2T(ExtractStr(obj, "rule"    ).c_str(), CP_UTF8));
-        fi.message  = CString(CA2T(ExtractStr(obj, "message" ).c_str(), CP_UTF8));
-        fi.code     = CString(CA2T(ExtractStr(obj, "code"    ).c_str(), CP_UTF8));
-        fi.fix      = CString(CA2T(ExtractStr(obj, "fix"     ).c_str(), CP_UTF8));
+        fi.severity = Utf8ToCString(ExtractStr(obj, "severity"));
+        fi.file     = Utf8ToCString(ExtractStr(obj, "file"    ));
+        fi.rule     = Utf8ToCString(ExtractStr(obj, "rule"    ));
+        fi.message  = Utf8ToCString(ExtractStr(obj, "message" ));
+        fi.code     = Utf8ToCString(ExtractStr(obj, "code"    ));
+        fi.fix      = Utf8ToCString(ExtractStr(obj, "fix"     ));
         fi.line     = ExtractInt(obj, "line");
         m_findings.push_back(fi);
 
