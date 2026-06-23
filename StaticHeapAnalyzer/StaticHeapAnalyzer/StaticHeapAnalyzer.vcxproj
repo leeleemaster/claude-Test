@@ -142,28 +142,26 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="analyzers\AllocatorAnalyzer.cpp" />
-    <ClCompile Include="analyzers\BufferOverrunAnalyzer.cpp" />
     <ClCompile Include="analyzers\CtorInitAnalyzer.cpp" />
-    <ClCompile Include="analyzers\HeapMismatchAnalyzer.cpp" />
+    <ClCompile Include="analyzers\LineRuleAnalyzer.cpp" />
+    <ClCompile Include="analyzers\ScopeRuleAnalyzer.cpp" />
     <ClCompile Include="analyzers\StackHeapAnalyzer.cpp" />
     <ClCompile Include="analyzers\ThreadSafetyAnalyzer.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="report\ReportGenerator.cpp" />
     <ClCompile Include="RuleEngine.cpp" />
-    <ClCompile Include="SymbolTable.cpp" />
     <ClCompile Include="TokenScanner.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="analyzers\AllocatorAnalyzer.h" />
-    <ClInclude Include="analyzers\BufferOverrunAnalyzer.h" />
     <ClInclude Include="analyzers\CtorInitAnalyzer.h" />
-    <ClInclude Include="analyzers\HeapMismatchAnalyzer.h" />
+    <ClInclude Include="analyzers\LineRuleAnalyzer.h" />
+    <ClInclude Include="analyzers\ScopeRuleAnalyzer.h" />
     <ClInclude Include="analyzers\StackHeapAnalyzer.h" />
     <ClInclude Include="analyzers\ThreadSafetyAnalyzer.h" />
     <ClInclude Include="report\ReportGenerator.h" />
     <ClInclude Include="report\Severity.h" />
     <ClInclude Include="RuleEngine.h" />
-    <ClInclude Include="SymbolTable.h" />
     <ClInclude Include="TokenScanner.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
