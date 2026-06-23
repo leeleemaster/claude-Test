@@ -244,7 +244,7 @@ struct HeapImpactInfo {
     std::wstring explanation;
 };
 
-static bool RulePrefixMatch(const std::wstring& rule, const std::wstring& key) {
+static bool MatchesRulePrefix(const std::wstring& rule, const std::wstring& key) {
     if (rule.size() < key.size()) return false;
     if (rule.compare(0, key.size(), key) != 0) return false;
     if (rule.size() == key.size()) return true;
@@ -257,31 +257,31 @@ static HeapImpactInfo GetHeapImpact(const std::wstring& rule) {
     std::transform(up.begin(), up.end(), up.begin(),
                    [](wchar_t c) { return static_cast<wchar_t>(std::towupper(static_cast<std::wint_t>(c))); });
 
-    if (RulePrefixMatch(up, L"R1"))
+    if (MatchesRulePrefix(up, L"R1"))
         return { L"직접적 (DIRECT)", L"Potential out-of-bounds write/copy can directly corrupt adjacent memory or heap-managed buffers." };
-    if (RulePrefixMatch(up, L"R2"))
+    if (MatchesRulePrefix(up, L"R2"))
         return { L"직접적 (DIRECT)", L"Mismatched new/delete or new[]/delete[] can corrupt allocator-managed heap state." };
-    if (RulePrefixMatch(up, L"R3"))
+    if (MatchesRulePrefix(up, L"R3"))
         return { L"직접적 (DIRECT)", L"Mixing new/delete with malloc/free can directly break heap management." };
-    if (RulePrefixMatch(up, L"R4"))
+    if (MatchesRulePrefix(up, L"R4"))
         return { L"가능성 있음 (POSSIBLE)", L"sizeof(pointer) misuse may under-initialize/copy memory and contribute to later heap misuse." };
-    if (RulePrefixMatch(up, L"R5"))
+    if (MatchesRulePrefix(up, L"R5"))
         return { L"간접적 (INDIRECT)", L"Zero-length memset is more of a logic/init defect than direct heap corruption by itself." };
-    if (RulePrefixMatch(up, L"R6"))
+    if (MatchesRulePrefix(up, L"R6"))
         return { L"가능성 있음 (POSSIBLE)", L"Off-by-one indexing can become an out-of-bounds write/read depending on actual access." };
-    if (RulePrefixMatch(up, L"R7"))
+    if (MatchesRulePrefix(up, L"R7"))
         return { L"가능성 있음 (POSSIBLE)", L"Missing ReleaseBuffer() can violate buffer ownership/contract and lead to later memory problems." };
-    // R8 is intentionally not mapped here because only listed rule families are mapped;
-    // unmatched rules (including R8) fall back to "검토 필요 (REVIEW)" below.
-    if (RulePrefixMatch(up, L"R9"))
+    // Analyzer rule table has no R8 entry; unmapped rules (including R8-like IDs)
+    // intentionally fall back to "검토 필요 (REVIEW)" below.
+    if (MatchesRulePrefix(up, L"R9"))
         return { L"직접적 (DIRECT)", L"Double free is a classic direct heap corruption pattern." };
-    if (RulePrefixMatch(up, L"ALLOC-001"))
+    if (MatchesRulePrefix(up, L"ALLOC-001"))
         return { L"가능성 있음 (POSSIBLE)", L"Using raw allocated storage without proper object initialization can trigger invalid memory behavior." };
-    if (RulePrefixMatch(up, L"CTOR-001"))
+    if (MatchesRulePrefix(up, L"CTOR-001"))
         return { L"가능성 있음 (POSSIBLE)", L"Uninitialized pointer member use may dereference invalid memory and can lead to heap corruption." };
-    if (RulePrefixMatch(up, L"STACK-001"))
+    if (MatchesRulePrefix(up, L"STACK-001"))
         return { L"직접적 (DIRECT)", L"Deleting a stack address is invalid deallocation and can directly corrupt heap internals." };
-    if (RulePrefixMatch(up, L"THREAD-001"))
+    if (MatchesRulePrefix(up, L"THREAD-001"))
         return { L"가능성 있음 (POSSIBLE)", L"Races around shared pointer initialization/access can lead to double free, leaks, or corrupted memory state." };
     return { L"검토 필요 (REVIEW)", L"This finding may affect memory safety depending on context and should be reviewed manually." };
 }
@@ -344,13 +344,17 @@ static bool WriteReportFile(const std::wstring& outputPath, std::wstring& error)
     std::string utf8 = WUtf8(text);
     BYTE bom[3] = { 0xEF, 0xBB, 0xBF };
     DWORD written = 0;
+    DWORD bomErr = ERROR_SUCCESS;
+    DWORD txtErr = ERROR_SUCCESS;
     BOOL okBom = WriteFile(hFile, bom, sizeof(bom), &written, nullptr);
-    bool bomOk = (okBom && written == sizeof(bom));
+    bool bomWritten = (okBom && written == sizeof(bom));
+    if (!bomWritten) bomErr = GetLastError();
     BOOL okTxt = WriteFile(hFile, utf8.data(), (DWORD)utf8.size(), &written, nullptr);
-    bool txtOk = (okTxt && written == utf8.size());
+    bool txtWritten = (okTxt && written == utf8.size());
+    if (!txtWritten) txtErr = GetLastError();
     CloseHandle(hFile);
-    if (!bomOk || !txtOk) {
-        DWORD lastErr = GetLastError();
+    if (!bomWritten || !txtWritten) {
+        DWORD lastErr = (txtErr != ERROR_SUCCESS) ? txtErr : bomErr;
         error = L"파일 쓰기에 실패했습니다. (오류 코드: " + std::to_wstring(lastErr) + L")";
         return false;
     }
